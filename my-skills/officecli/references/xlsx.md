@@ -51,16 +51,18 @@ JSON
 
 目标：创建一个数据工作表，写入文本、数值和求和公式，形成最小的公式驱动工作簿。
 
+`create` 会生成默认的 `Sheet1`。新建单工作表文件时直接重命名并复用它，不要再添加同用途的工作表；需要多个工作表时，将 `Sheet1` 重命名为第一个目标工作表，再添加其余工作表。
+
 ```bash
 "$OCLI" create "$FILE"
-"$OCLI" add "$FILE" / --type sheet --prop name=Data
+"$OCLI" set "$FILE" /Sheet1 --prop name=Data
 "$OCLI" set "$FILE" /Data/A1 --prop value='名称' --prop bold=true
 "$OCLI" set "$FILE" /Data/B2 --prop value=100 --prop type=number
 "$OCLI" set "$FILE" /Data/B10 --prop formula='SUM(B2:B9)'
 "$OCLI" close "$FILE"
 ```
 
-预期结果：工作簿包含 `Data` 工作表、加粗表头、数值单元格以及计算 `B2:B9` 合计的公式单元格。
+预期结果：工作簿只包含一个名为 `Data` 的工作表，不保留多余的 `Sheet1`；该工作表包含加粗表头、数值单元格以及计算 `B2:B9` 合计的公式单元格。
 
 使图表引用单元格范围，不复制静态数据。突出表头、冻结窗格并设置合理列宽；避免合并单元格破坏筛选。仅用条件格式表达业务含义。
 
@@ -109,10 +111,11 @@ JSON
 "$OCLI" close "$FILE"
 "$OCLI" validate "$FILE"
 "$OCLI" view "$FILE" issues
-"$OCLI" view "$FILE" issues --type numeric_overflow
-"$OCLI" view "$FILE" issues --type general_precision_loss
-"$OCLI" view "$FILE" html  # 检查工作表渲染、列宽和图表布局
-"$OCLI" view "$FILE" screenshot --grid auto -o /tmp/xlsx-contact-sheet.png  # 生成工作表缩略图
+"$OCLI" view "$FILE" screenshot -o /tmp/xlsx-preview.png
 ```
 
+先执行一次通用 `view issues`。只有报告具体问题时，才使用对应的 `--type` 定位和复查；例如调整日期列宽后只复查 `numeric_overflow`，修改长数字格式后只复查 `general_precision_loss`。所有修复完成后，再对最终状态运行一次通用 `view issues`。
+
 检查 `#REF!`、`#DIV/0!`、`#VALUE!`、`#NAME?` 等错误，核对公式缓存、年份格式、列宽、截断、图表标题和图例、打印范围、隐藏辅助表、活动工作表及跨表引用。`numeric_overflow` 表示明确数字格式的显示宽度不足，按建议加宽列、缩短格式或谨慎使用 `shrinkToFit`；`general_precision_loss` 表示 General 格式会以科学计数法显示较长数字，设置明确的 `numberformat`，加宽列不能解决。随机抽查至少 2–3 个关键公式，使用 `get --json` 核对公式、依赖来源、`evaluated`、`cachedValue` 和 `computedValue`。
+
+版式重要时执行截图检查。截图返回 `no_screenshot_backend` 后停止重试，改用 `"$OCLI" view "$FILE" html -o /tmp/xlsx-preview.html` 辅助检查，并明确说明未完成截图级视觉验证；HTML 不能替代真实截图或目标 Excel 查看器中的视觉检查。

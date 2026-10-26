@@ -1,6 +1,6 @@
 ---
 name: officecli
-description: 当任务以 Word、Excel 或 PowerPoint 文件作为输入或输出，或需要将 CSV、TSV 数据导入 Excel 时使用；支持创建、读取、编辑、排版、诊断和验证 .docx、.docm、.doc、.xlsx、.xlsm、.xls、.pptx、.pptm、.ppt 文件。
+description: 当任务以 Word、Excel 或 PowerPoint 文件作为输入或输出时使用；支持创建、读取、编辑、排版、诊断和验证 .docx、.docm、.doc、.xlsx、.xlsm、.xls、.pptx、.pptm、.ppt 文件。
 ---
 
 # OfficeCLI 文件处理
@@ -11,14 +11,14 @@ description: 当任务以 Word、Excel 或 PowerPoint 文件作为输入或输�
 
 | 平台 | 程序 |
 |---|---|
-| Apple Silicon Mac | `<本技能绝对目录>/bin/officecli-mac-arm64` |
-| Intel Mac | `<本技能绝对目录>/bin/officecli-mac-x64` |
-| Linux ARM64（glibc） | `<本技能绝对目录>/bin/officecli-linux-arm64` |
-| Linux x64（glibc） | `<本技能绝对目录>/bin/officecli-linux-x64` |
+| Apple Silicon Mac（macOS 12 及以上） | `<本技能绝对目录>/bin/officecli-mac-arm64` |
+| Intel Mac（macOS 12 及以上） | `<本技能绝对目录>/bin/officecli-mac-x64` |
+| Linux ARM64（glibc 2.27 及以上） | `<本技能绝对目录>/bin/officecli-linux-arm64` |
+| Linux x64（glibc 2.27 及以上） | `<本技能绝对目录>/bin/officecli-linux-x64` |
 | Windows ARM64 | `<本技能绝对目录>\bin\officecli-win-arm64.exe` |
 | Windows x64 | `<本技能绝对目录>\bin\officecli-win-x64.exe` |
 
-macOS 和 Linux 根据 `uname -m` 选择程序：`arm64`、`aarch64` 使用 ARM64，`x86_64`、`amd64` 使用 x64。Linux 程序用于 glibc 环境，不用于 Alpine 等 musl 环境。将程序绝对路径赋给 `OCLI`。
+macOS 和 Linux 根据 `uname -m` 选择程序：`arm64`、`aarch64` 使用 ARM64，`x86_64`、`amd64` 使用 x64。Linux 程序用于 glibc 2.27 及以上环境，不用于 Alpine 等 musl 环境。将程序绝对路径赋给 `OCLI`。
 
 Windows PowerShell 使用 `[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture` 判断 `Arm64` 或 `X64`，将对应程序的绝对路径赋给 `$OCLI`，使用 `& $OCLI ...` 执行。其他平台当前不支持。
 
@@ -60,7 +60,7 @@ $env:OFFICECLI_NO_AUTO_RESIDENT = "1"
 4. 按“语义化 DOM 操作 → 必要时原始 XML”的顺序修改。
 5. 先用少量操作验证结构，再使用 `batch` 执行大量同类操作；检查退出状态、JSON `success`、`warnings`、失败项和回滚状态，不能只统计成功项。
 6. 默认不调用 `open`；直接执行修改命令或使用 `batch`，让每条命令自行保存并释放文件。
-7. 最后一项修改完成后先执行 `close`，再执行结构、格式和视觉检查；修复问题后重新关闭并执行完整检查。
+7. 编辑过程中按修改风险检查受影响内容；全部修改完成后先执行 `close`，再对最终状态执行完整的结构、格式和视觉检查。
 
 ## 会话规则
 
@@ -122,6 +122,13 @@ $env:OFFICECLI_NO_AUTO_RESIDENT = "1"
 - 使用 `data=` 填充 Word 或 PowerPoint 表格时遵循 CSV 引号规则：含逗号、行分隔符或双引号的单元格用双引号包裹，内部双引号写成两个双引号。
 - 不能编造用户未提供的数据、来源、业务结果或文档事实。
 
+## 分级检查
+
+- 仅修改字体、颜色、边框、对齐、位置、尺寸、行高或列宽时，先读取受影响路径，并复查相关问题类型和视觉结果；不必在每次局部调整后重复完整结构校验。
+- 修改正文、单元格值、公式或导入数据后，读取受影响范围确认内容、类型和公式状态，并检查相关问题；完整结构校验可以留到最终交付前。
+- 使用 `raw-set`、`add-part`，修改部件关系、保护或宏启用文件，执行结构性删除、移动、合并，或遇到 Batch 警告、失败、回滚时，在下一个稳定状态执行 `close`、`validate`、`view issues` 并重新读取受影响结构，再继续依赖该结果。
+- 分级检查不能代替最终交付检查。修复过程中先复查受影响内容；全部修复完成后，再对最终状态执行一次完整检查。
+
 ## 交付检查
 
-对每个文件依次执行 `close`、`validate`、`view issues`、结构检查和视觉检查。检查后若再次修改，必须重新执行这一完整顺序。版式重要时使用 `view screenshot --grid auto` 或逐页截图。无法渲染时明确说明“未完成视觉验证”，不得把结构验证等同于视觉验证；`close` 未成功时不得交付。
+对每个文件的最终状态依次执行 `close`、`validate`、`view issues`、结构或内容抽查和必要的视觉检查。最终检查后若需要修改，先按分级检查复核受影响内容；所有修复完成后，对新的最终状态重新执行一次完整检查。版式重要时使用截图；Word 和 PowerPoint 多页总览可使用 `view screenshot --grid auto`。截图返回 `no_screenshot_backend` 后停止重试，可使用 HTML 辅助检查并明确说明“未完成截图级视觉验证”；不得把结构验证等同于视觉验证，`close` 未成功时不得交付。
